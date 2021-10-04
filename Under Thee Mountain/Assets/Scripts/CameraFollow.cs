@@ -9,6 +9,11 @@ public class CameraFollow : MonoBehaviour
 
     private void Update()
     {
+        CheckPlayerPosition();
+    }
+
+    private void CheckPlayerPosition()
+    {
         if((transform.position != new Vector3(PlayerReference.transform.position.x, 
             PlayerReference.transform.position.y + Offset, 
             PlayerReference.transform.position.z)))
@@ -17,7 +22,7 @@ public class CameraFollow : MonoBehaviour
                 PlayerReference.transform.position.x, 
                 PlayerReference.transform.position.y + Offset, 
                 PlayerReference.transform.position.z
-                );
+            );
         }
     }
 }

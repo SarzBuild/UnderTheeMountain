@@ -23,6 +23,8 @@ public class PlayerReferences : MonoBehaviour
     
     public int MaxHealth;
     public int CurrentHealth;
+
+    public int TargetFound;
     
     public int MaxAmmoInMagazineCount = 8;
     public int CurrentAmmoInMagazineCount;

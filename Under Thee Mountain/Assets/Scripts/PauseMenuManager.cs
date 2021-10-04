@@ -46,16 +46,18 @@ public class PauseMenuManager : MonoBehaviour
         }
     }
 
-    private void UIMenuOnDeath()
+    public void UIMenuOnDeath()
     {
         _endCondition = true;
         ShowMenu("GAME END!", "You died!");
+        Time.timeScale = 0;
     }
 
-    private void UIMenuOnWin()
+    public void UIMenuOnWin()
     {
         _endCondition = true;
         ShowMenu("GAME END!", "You won!");
+        Time.timeScale = 0;
     }
 
 

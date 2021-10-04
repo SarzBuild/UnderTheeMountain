@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.Remoting.Messaging;
 using Unity.VisualScripting;
 using UnityEditor.Experimental.GraphView;
 using UnityEngine;
@@ -8,35 +9,42 @@ using UnityEngine.AI;
 
 public class EnemyBrain : MonoBehaviour
 {
+    [Header("Inventory")]
+    public int MaxHealth = 100;
+    public int CurrentHealth;
+    public int ScoreToGive;
+    
+    [Header("References")]
     public Transform TargetPlayer;
-    private Vector3 _movementVector;
+    public NavMeshAgent NavMeshAgent;
+    public Collider EnemyCollider;
+    public Transform FleeToTarget;
+    
+    private PlayerReferences _playerReferences;
+    
+    [Header("Brain Functionalities & Navigation")]
     public float AggroRange;
     public int RunThreshold;
     public float SeeingRange;
+
+    private Vector3 _movementVector;
     private Vector3 _originalPosition;
     private Vector3 _aimDirection;
     private Vector3 _rotationNeeded;
-    public Collider EnemyCollider;
     private Transform _nearestTarget;
 
-    private bool _possibleGangUp;
     private bool _attackPlayer;
+    private bool _possibleGangUp;
+    private bool _canMove;
 
-    public int MaxHealth = 100;
-    public int CurrentHealth;
-
+    [Header("Layer Masks")]
+    public LayerMask PlayerLayerMask;
+    public LayerMask FriendLayerMask;
+    
+    [Header("Detection Lists")]
     public Collider[] Colliders;
     public List<Transform> NearestTransforms = new List<Transform>();
     
-    public LayerMask PlayerLayerMask;
-    public LayerMask FriendLayerMask;
-
-    public NavMeshAgent NavMeshAgent;
-
-    public Transform EndLevelTransform;
-    private bool _canMove;
-    
-
     private void Awake()
     {
         EnemyCollider = GetComponent<Collider>();
@@ -44,9 +52,14 @@ public class EnemyBrain : MonoBehaviour
         _canMove = true;
     }
 
+    private void Start()
+    {
+        _playerReferences = PlayerReferences.Instance;
+    }
+
     private void Update()
     {
-        HandleLookAtTarget();
+        HandleLookAtChooseTarget();
         HandleDeath();
         HandleMovement();
         HandleFlee();
@@ -61,8 +74,7 @@ public class EnemyBrain : MonoBehaviour
     private bool HandleSeeingDistancePlayer() => HandleNearDetectionPlayer(SeeingRange);
     private bool HandleSeeingDistanceFriend() => HandleNearDetectionFriends(SeeingRange);
     private bool HandleAggroDistancePlayer() => HandleNearDetectionPlayer(AggroRange);
-
-
+    
     private bool HandleNearDetectionPlayer(float radius)
     {
         Colliders = Physics.OverlapSphere(transform.position, radius, PlayerLayerMask);
@@ -72,8 +84,6 @@ public class EnemyBrain : MonoBehaviour
         }
         return false;
     }
-
-
     private bool HandleNearDetectionFriends(float radius)
     {
         Colliders = Physics.OverlapSphere(transform.position, radius, FriendLayerMask);
@@ -92,7 +102,7 @@ public class EnemyBrain : MonoBehaviour
         return false;
     }
 
-    private void HandleLookAtTarget()
+    private void HandleLookAtChooseTarget()
     {
         if (HandleSeeingDistancePlayer())
         {
@@ -100,11 +110,11 @@ public class EnemyBrain : MonoBehaviour
         }
         else if (HandleSeeingDistanceFriend())
         {
-            HandleLookAt(HandleLookAtNearestFriend());
+            HandleLookAt(HandleFindNearestFriend());
         }
     }
 
-    private Transform HandleLookAtNearestFriend()
+    private Transform HandleFindNearestFriend()
     {
         _nearestTarget = null;
         if (NearestTransforms != null && NearestTransforms.Count > 0)
@@ -124,15 +134,7 @@ public class EnemyBrain : MonoBehaviour
         }
         return transform;
     }
-
-    private void SendMessageToFriends()
-    {
-        foreach (var variTransform in NearestTransforms)
-        {
-            variTransform.GetComponent<EnemyBrain>().NearestTransforms.Remove(transform);
-        }
-    }
-
+    
     private void HandleLookAt(Transform target)
     {
         var angleOffset = 90f;
@@ -146,10 +148,13 @@ public class EnemyBrain : MonoBehaviour
 
     private void HandleMovement()
     {
-        if (CurrentHealth > RunThreshold && !_possibleGangUp)
+        if (CurrentHealth > RunThreshold || _possibleGangUp)
         {
             if (HandleAggroDistancePlayer())
             {
+                if(NearestTransforms !=null && NearestTransforms.Count > 0)
+                    foreach (var friend in NearestTransforms)
+                        friend.GetComponent<EnemyBrain>()._attackPlayer = true;
                 _attackPlayer = true;
             }
         }
@@ -161,12 +166,11 @@ public class EnemyBrain : MonoBehaviour
 
     private void HandleAttack()
     {
+        if (_attackPlayer) 
         {
-            if (_attackPlayer)
-            {
-                NavMeshAgent.SetDestination(TargetPlayer.position);
-            }
+            NavMeshAgent.SetDestination(TargetPlayer.position);
         }
+        
     }
 
     private void HandleFlee()
@@ -178,7 +182,7 @@ public class EnemyBrain : MonoBehaviour
                 _attackPlayer = false;
                 if (_canMove)
                 {
-                    NavMeshAgent.SetDestination(EndLevelTransform.position);
+                    NavMeshAgent.SetDestination(FleeToTarget.position);
                 }
             }
         }
@@ -186,7 +190,14 @@ public class EnemyBrain : MonoBehaviour
 
     private void OnDisable()
     {
-        SendMessageToFriends();
+        OnDisableUnsubToFriendsLists();
+    }
+    private void OnDisableUnsubToFriendsLists()
+    {
+        foreach (var variTransform in NearestTransforms)
+        {
+            variTransform.GetComponent<EnemyBrain>().NearestTransforms.Remove(transform);
+        }
     }
 
     public void GetDamaged(int damageAmount)
@@ -200,6 +211,7 @@ public class EnemyBrain : MonoBehaviour
         {
             _canMove = false;
             NavMeshAgent.isStopped = true;
+            _playerReferences.ScoreCount += ScoreToGive;
             gameObject.SetActive(false);
         }
     }

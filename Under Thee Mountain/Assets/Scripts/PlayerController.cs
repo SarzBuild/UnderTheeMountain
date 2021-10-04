@@ -9,39 +9,41 @@ using UnityEngine.UI;
 
 public class PlayerController : MonoBehaviour
 {
+    [Header("References")]
+    public Collider PlayerCollider;
+    public Rigidbody Rigidbody;
+    
     private PlayerControls _playerControls;
     private PlayerReferences _playerReferences;
-
+    
+    [Header("Physics")]
+    public float WalkSpeed = 4f;
+    public float JumpingSpeed;
+    public float Gravity = -9.81f;
+    public float JumpForce = 12f;
+    private float _jumpAndFallVelocity;
+    
     private Vector3 _aimDirection;
     private Vector3 _rotationNeeded;
     private Vector3 _targetPosition;
-    
-    public Collider PlayerCollider;
-    public Rigidbody Rigidbody;
-
-
-    public float WalkSpeed = 4f;
-    public float JumpingSpeed;
-
-    public float Gravity = -9.81f;
-    public float JumpForce = 12f;
-    
-    public GameObject AimEndPoint;
-    public GameObject Flash;
-    public LayerMask ShootingLayerMask;
-
-    public LayerMask GroundLayerMask;
-    
-    public float _jumpAndFallVelocity;
 
     private bool _coroutineRunning;
     private bool _coroutineRunning2;
-
+    
+    [Header("Shooting Related")]
+    public GameObject AimEndPoint;
+    public GameObject Flash;
+    
+    [Header("Layer Masks")]
+    public LayerMask ShootingLayerMask;
+    public LayerMask TargetLayerMask;
+    public LayerMask GroundLayerMask;
+    public LayerMask EnemyLayerMask;
+    
+    [Header("UI")]
     public Image EnemyHealthAmountBackground;
     public Image EnemyHealthAmountSlice;
-    public LayerMask EnemyLayerMask;
-
-
+    public PauseMenuManager PauseMenuManager;
 
     private void Awake()
     {
@@ -54,7 +56,15 @@ public class PlayerController : MonoBehaviour
         _playerControls = PlayerControls.Instance;
         _playerReferences = PlayerReferences.Instance;
     }
-
+    
+    private void Update()
+    {
+        HandleRotation();
+        HandleShooting();
+        HandleReloading();
+        HandleShowHealthOfEnemies();
+        HandleLife();
+    }
     private void FixedUpdate()
     {
         HandleMovement();
@@ -62,31 +72,22 @@ public class PlayerController : MonoBehaviour
         HandleFall();
         DecreaseJumpSpeed();
     }
-
-    private void Update()
-    {
-        HandleRotation();
-        HandleShooting();
-        HandleReloading();
-        HandleShowHealth();
-        HandleLife();
-    }
-
-
+    
     private void HandleMovement()
     {
         Vector3 moveDirection = new Vector3(0, 0);
         if (_playerControls.GetMovingUp())
             moveDirection.z = +1;
-        if (_playerControls.GetMovingDown()) 
+        if (_playerControls.GetMovingDown())
             moveDirection.z = -1;
-        if (_playerControls.GetMovingLeft()) 
+        if (_playerControls.GetMovingLeft())
             moveDirection.x = -1;
-        if (_playerControls.GetMovingRight()) 
+        if (_playerControls.GetMovingRight())
             moveDirection.x = +1;
         moveDirection.Normalize();
 
-        Vector3 moveTowardsPosition = new Vector3(moveDirection.x * WalkSpeed, _jumpAndFallVelocity, moveDirection.z * WalkSpeed);
+        Vector3 moveTowardsPosition =
+            new Vector3(moveDirection.x * WalkSpeed, _jumpAndFallVelocity, moveDirection.z * WalkSpeed);
         Rigidbody.velocity = moveTowardsPosition;
     }
 
@@ -98,38 +99,14 @@ public class PlayerController : MonoBehaviour
             {
                 if (_jumpAndFallVelocity < 0.1)
                 {
-                    StartCoroutine(DecreaseJumpSpeedIEnumerator());
+                    StartCoroutine(SetJumpSpeedCoroutine());
                     _jumpAndFallVelocity += (WalkSpeed * JumpForce) * 0.2f;
                 }
             }
         }
     }
     
-    private void HandleFall()
-    {
-        if (!CheckIfGrounded())
-            _jumpAndFallVelocity += (Gravity * WalkSpeed/2) * Time.deltaTime;
-        else if (CheckIfGrounded())
-        {
-            if (_jumpAndFallVelocity <= 0f)
-            {
-                ResetJumpVariablesAndCr();
-            }
-        }
-    }
-    
-    private void ResetJumpVariablesAndCr()
-    {
-        _jumpAndFallVelocity = 0f;
-        JumpingSpeed = 1f;
-        if (_coroutineRunning)
-        {
-            StopCoroutine(DecreaseJumpSpeedIEnumerator());
-            _coroutineRunning = false;
-        }
-    }
-    
-    private IEnumerator DecreaseJumpSpeedIEnumerator()
+    private IEnumerator SetJumpSpeedCoroutine()
     {
         _coroutineRunning = true;
         JumpingSpeed = 1.5f;
@@ -141,16 +118,40 @@ public class PlayerController : MonoBehaviour
     {
         if (_coroutineRunning)
             if (JumpingSpeed > 1f)
-                JumpingSpeed -= Time.fixedDeltaTime*0.5f;
+                JumpingSpeed -= Time.fixedDeltaTime * 0.5f;
             else
                 JumpingSpeed = 1f;
+    }
+
+    private void HandleFall()
+    {
+        if (!CheckIfGrounded())
+            _jumpAndFallVelocity += (Gravity * WalkSpeed / 2) * Time.deltaTime;
+        else if (CheckIfGrounded())
+        {
+            if (_jumpAndFallVelocity <= 0f)
+            {
+                ResetJumpVariablesAndCr();
+            }
+        }
+    }
+
+    private void ResetJumpVariablesAndCr()
+    {
+        _jumpAndFallVelocity = 0f;
+        JumpingSpeed = 1f;
+        if (_coroutineRunning)
+        {
+            StopCoroutine(SetJumpSpeedCoroutine());
+            _coroutineRunning = false;
+        }
     }
 
     private void HandleRotation()
     {
         Vector3 mousePosition = _playerControls.GetMousePos();
         var angleOffset = 90f;
-        
+
         _aimDirection = (mousePosition - transform.position).normalized;
         float angle = Mathf.Atan2(_aimDirection.x, _aimDirection.z) * Mathf.Rad2Deg;
         _rotationNeeded = new Vector3(0, angle - angleOffset, 0);
@@ -164,19 +165,20 @@ public class PlayerController : MonoBehaviour
             if (_playerReferences.CurrentAmmoInMagazineCount > 0)
             {
                 _playerReferences.CurrentAmmoInMagazineCount--;
-                StartCoroutine(MusselFlash());
+                StartCoroutine(MuzzleFlash());
                 RaycastHit hit;
                 Physics.Raycast(
-                    AimEndPoint.transform.position, 
-                    _aimDirection, 
-                    out hit, 
+                    AimEndPoint.transform.position,
+                    _aimDirection,
+                    out hit,
                     Vector3.Distance(
-                        AimEndPoint.transform.position, 
-                        _playerControls.GetMousePos()), 
+                        AimEndPoint.transform.position,
+                        _playerControls.GetMousePos()),
                     ShootingLayerMask);
                 if (hit.collider == null)
                 {
-                    _targetPosition = new Vector3(_playerControls.GetMousePos().x, transform.position.y, _playerControls.GetMousePos().z);
+                    _targetPosition = new Vector3(_playerControls.GetMousePos().x, transform.position.y,
+                        _playerControls.GetMousePos().z);
                     Debug.DrawLine(AimEndPoint.transform.position, _targetPosition, Color.red, 5f);
                 }
                 else
@@ -191,17 +193,27 @@ public class PlayerController : MonoBehaviour
                             enemyBrain.GetDamaged(40);
                         }
                     }
+                    if ((TargetLayerMask.value & (1 << hit.collider.gameObject.layer)) > 0)
+                    {
+                        Debug.Log("Helloooo");
+                        TargetEnemy targetEnemy = hit.collider.GetComponent<TargetEnemy>();
+                        if (targetEnemy != null)
+                        {
+                            Debug.Log("Helloooo222");
+                            targetEnemy.Interacted();
+                        }
+                    }
                 }
             }
         }
     }
 
-    private IEnumerator MusselFlash()
+    private IEnumerator MuzzleFlash()
     {
         Flash.SetActive(true);
         yield return new WaitForSeconds(0.1f);
         Flash.SetActive(false);
-        StopCoroutine(MusselFlash());
+        StopCoroutine(MuzzleFlash());
     }
 
     private void HandleReloading()
@@ -222,22 +234,24 @@ public class PlayerController : MonoBehaviour
         {
             _playerReferences.CurrentHealth = _playerReferences.MaxHealth;
         }
-    }
-
-    private void OnTriggerEnter(Collider other)
-    {
-        if ((EnemyLayerMask.value & (1 << other.gameObject.layer)) > 0)
+        else if (_playerReferences.CurrentHealth <= 0)
         {
-            GetDamaged();
+            _playerReferences.CurrentHealth = 0;
+            Death();
         }
     }
-
+    
     private void GetDamaged()
     {
         _playerReferences.CurrentHealth -= 10;
     }
 
-    private void HandleShowHealth()
+    private void Death()
+    {
+        PauseMenuManager.UIMenuOnDeath();
+    }
+
+    private void HandleShowHealthOfEnemies()
     {
         Vector3 ray = new Vector3(_playerControls.GetMousePos().x, _playerControls.MainCamera.transform.position.y - 5f,_playerControls.GetMousePos().z);
         RaycastHit hit;
@@ -261,6 +275,14 @@ public class PlayerController : MonoBehaviour
         if(!successfulHit)
         {
             EnemyHealthAmountBackground.gameObject.SetActive(false);
+        }
+    }
+    
+    private void OnTriggerEnter(Collider other)
+    {
+        if ((EnemyLayerMask.value & (1 << other.gameObject.layer)) > 0)
+        {
+            GetDamaged();
         }
     }
 

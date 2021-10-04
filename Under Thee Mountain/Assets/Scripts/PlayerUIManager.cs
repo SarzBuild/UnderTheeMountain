@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using System.Linq;
 using TMPro;
 using UnityEngine;
@@ -14,14 +15,21 @@ public class PlayerUIManager : MonoBehaviour
     private int _tempChargerCount;
     private int _tempScoreCount;
     private int _tempCurrentHealth;
+    private int _targetInScene;
     private Transform _tempScoreCountTransform;
 
     public TextMeshProUGUI BulletCount;
     public TextMeshProUGUI ChargerCount;
     public TextMeshProUGUI ScoreCount;
     public TextMeshProUGUI HealthCount;
+
+    public TextMeshProUGUI TotalTargets;
+    public TextMeshProUGUI TargetsFound;
+    
     
     public Image HealthImage;
+
+    public List<Transform> TargetEnemies;
     
     private void Start()
     {
@@ -32,11 +40,19 @@ public class PlayerUIManager : MonoBehaviour
         _tempChargerCount = _playerReferences.CurrentMagazineCount;
         _tempScoreCount = _playerReferences.ScoreCount;
         _tempCurrentHealth = _playerReferences.CurrentHealth;
-        
+        _targetInScene = _playerReferences.TargetFound;
         
         _tempScoreCountTransform = ScoreCount.transform;
         
+        TotalTargetsFinder();
+    }
 
+    private void TotalTargetsFinder()
+    {
+        if (TargetEnemies != null && TargetEnemies.Count > 0)
+        {
+            TotalTargets.text = TargetEnemies.Count.ToString();
+        }
     }
 
     private void Update()
@@ -45,6 +61,16 @@ public class PlayerUIManager : MonoBehaviour
         UpdateChargers();
         UpdateScore();
         UpdateLife();
+        UpdateTargets();
+    }
+
+    private void UpdateTargets()
+    {
+        if (_playerReferences.TargetFound != _targetInScene)
+        {
+            TargetsFound.text = _playerReferences.TargetFound.ToString();
+            _targetInScene = _playerReferences.TargetFound;
+        }
     }
 
     private void UpdateBullets()
@@ -89,7 +115,6 @@ public class PlayerUIManager : MonoBehaviour
         _tempScoreCount++;
         yield return new WaitForEndOfFrame();
         TweenJuicer();
-        Debug.Log("Helloooo");
         StopCoroutine(ScoreJuicer());
     }
 
@@ -100,6 +125,6 @@ public class PlayerUIManager : MonoBehaviour
     }
     private void ResetTween()
     {
-        DOTween.Kill(ScoreCount.transform);
+        DOTween.Kill(ScoreCount);
     }
 }
