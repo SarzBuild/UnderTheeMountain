@@ -21,6 +21,9 @@ public class PlayerReferences : MonoBehaviour
         }
     }
     
+    public int MaxHealth;
+    public int CurrentHealth;
+    
     public int MaxAmmoInMagazineCount = 8;
     public int CurrentAmmoInMagazineCount;
     public int MaxMagazineCount = 3;
@@ -37,6 +40,8 @@ public class PlayerReferences : MonoBehaviour
         {
             _instance = this;
         }
+        
+        CurrentHealth = MaxHealth;
     }
     
     

@@ -18,7 +18,7 @@ public class CollectableItem : MonoBehaviour
         if ((PlayerLayerMask.value & (1 << other.gameObject.layer)) > 0)
         {
             _playerReferences.CurrentMagazineCount++;
-            Destroy(transform.parent);
+            Destroy(transform.parent.gameObject);
         }
     }
 }

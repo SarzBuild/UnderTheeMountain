@@ -3,6 +3,7 @@ using System.Linq;
 using TMPro;
 using UnityEngine;
 using DG.Tweening;
+using UnityEngine.UI;
 
 public class PlayerUIManager : MonoBehaviour
 {
@@ -12,11 +13,15 @@ public class PlayerUIManager : MonoBehaviour
     private int _tempBulletCount;
     private int _tempChargerCount;
     private int _tempScoreCount;
+    private int _tempCurrentHealth;
     private Transform _tempScoreCountTransform;
 
     public TextMeshProUGUI BulletCount;
     public TextMeshProUGUI ChargerCount;
     public TextMeshProUGUI ScoreCount;
+    public TextMeshProUGUI HealthCount;
+    
+    public Image HealthImage;
     
     private void Start()
     {
@@ -26,8 +31,11 @@ public class PlayerUIManager : MonoBehaviour
         _tempBulletCount = _playerReferences.CurrentAmmoInMagazineCount;
         _tempChargerCount = _playerReferences.CurrentMagazineCount;
         _tempScoreCount = _playerReferences.ScoreCount;
-
+        _tempCurrentHealth = _playerReferences.CurrentHealth;
+        
+        
         _tempScoreCountTransform = ScoreCount.transform;
+        
 
     }
 
@@ -36,6 +44,7 @@ public class PlayerUIManager : MonoBehaviour
         UpdateBullets();
         UpdateChargers();
         UpdateScore();
+        UpdateLife();
     }
 
     private void UpdateBullets()
@@ -62,6 +71,16 @@ public class PlayerUIManager : MonoBehaviour
         {
             StartCoroutine(ScoreJuicer());
             ScoreCount.text = _tempScoreCount.ToString();
+        }
+    }
+
+    private void UpdateLife()
+    {
+        if (_tempCurrentHealth > _playerReferences.CurrentHealth)
+        {
+            HealthCount.text = _playerReferences.CurrentHealth.ToString("000");
+            HealthImage.fillAmount = Mathf.Clamp01(Mathf.InverseLerp(0, _playerReferences.MaxHealth, _playerReferences.CurrentHealth));
+            _tempCurrentHealth = _playerReferences.CurrentHealth;
         }
     }
 

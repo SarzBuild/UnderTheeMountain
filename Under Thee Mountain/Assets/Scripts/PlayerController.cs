@@ -1,8 +1,11 @@
 using System.Collections;
 using System.Collections.Generic;
+using Unity.Jobs;
+using Unity.VisualScripting;
 using UnityEditor.Experimental.GraphView;
 using UnityEngine;
 using UnityEngine.TextCore;
+using UnityEngine.UI;
 
 public class PlayerController : MonoBehaviour
 {
@@ -32,6 +35,13 @@ public class PlayerController : MonoBehaviour
     public float _jumpAndFallVelocity;
 
     private bool _coroutineRunning;
+    private bool _coroutineRunning2;
+
+    public Image EnemyHealthAmountBackground;
+    public Image EnemyHealthAmountSlice;
+    public LayerMask EnemyLayerMask;
+
+
 
     private void Awake()
     {
@@ -58,6 +68,8 @@ public class PlayerController : MonoBehaviour
         HandleRotation();
         HandleShooting();
         HandleReloading();
+        HandleShowHealth();
+        HandleLife();
     }
 
 
@@ -154,7 +166,14 @@ public class PlayerController : MonoBehaviour
                 _playerReferences.CurrentAmmoInMagazineCount--;
                 StartCoroutine(MusselFlash());
                 RaycastHit hit;
-                Physics.Raycast(AimEndPoint.transform.position, _aimDirection, out hit, Vector3.Distance(AimEndPoint.transform.position, _playerControls.GetMousePos()), ShootingLayerMask);
+                Physics.Raycast(
+                    AimEndPoint.transform.position, 
+                    _aimDirection, 
+                    out hit, 
+                    Vector3.Distance(
+                        AimEndPoint.transform.position, 
+                        _playerControls.GetMousePos()), 
+                    ShootingLayerMask);
                 if (hit.collider == null)
                 {
                     _targetPosition = new Vector3(_playerControls.GetMousePos().x, transform.position.y, _playerControls.GetMousePos().z);
@@ -162,8 +181,16 @@ public class PlayerController : MonoBehaviour
                 }
                 else
                 {
-                    Debug.DrawLine(AimEndPoint.transform.position, _targetPosition, Color.blue, 5f);
                     _targetPosition = new Vector3(hit.point.x, transform.position.y, hit.point.z);
+                    Debug.DrawLine(AimEndPoint.transform.position, _targetPosition, Color.blue, 5f);
+                    if ((EnemyLayerMask.value & (1 << hit.collider.gameObject.layer)) > 0)
+                    {
+                        EnemyBrain enemyBrain = hit.collider.GetComponent<EnemyBrain>();
+                        if (enemyBrain != null)
+                        {
+                            enemyBrain.GetDamaged(40);
+                        }
+                    }
                 }
             }
         }
@@ -189,23 +216,66 @@ public class PlayerController : MonoBehaviour
         }
     }
 
-    public void HandleDamage()
+    private void HandleLife()
     {
-        
+        if (_playerReferences.CurrentHealth > _playerReferences.MaxHealth)
+        {
+            _playerReferences.CurrentHealth = _playerReferences.MaxHealth;
+        }
+    }
+
+    private void OnTriggerEnter(Collider other)
+    {
+        if ((EnemyLayerMask.value & (1 << other.gameObject.layer)) > 0)
+        {
+            GetDamaged();
+        }
+    }
+
+    private void GetDamaged()
+    {
+        _playerReferences.CurrentHealth -= 10;
+    }
+
+    private void HandleShowHealth()
+    {
+        Vector3 ray = new Vector3(_playerControls.GetMousePos().x, _playerControls.MainCamera.transform.position.y - 5f,_playerControls.GetMousePos().z);
+        RaycastHit hit;
+        Physics.Raycast(ray, Vector3.down, out hit, Mathf.Infinity, EnemyLayerMask);
+        var successfulHit = false;
+        if (hit.collider != null)
+        {
+            EnemyBrain enemyBrain = hit.collider.GetComponent<EnemyBrain>();
+            if (enemyBrain != null)
+            {
+                EnemyHealthAmountBackground.gameObject.SetActive(true);
+                EnemyHealthAmountSlice.fillAmount = Mathf.Clamp01(Mathf.InverseLerp(0, enemyBrain.MaxHealth, enemyBrain.CurrentHealth));
+                var offset = 1f;
+                if (EnemyHealthAmountBackground.transform.position != new Vector3(hit.point.x ,hit.point.y + offset, hit.point.z))
+                {
+                    EnemyHealthAmountBackground.transform.position = new Vector3(hit.point.x ,hit.point.y + offset, hit.point.z);
+                }
+                successfulHit = true;
+            }
+        }
+        if(!successfulHit)
+        {
+            EnemyHealthAmountBackground.gameObject.SetActive(false);
+        }
     }
 
     private bool CheckIfGrounded()
     {
-        return CollisionCheck(new Vector3(0, -0.5f, 0), 0.5f, GroundLayerMask);
+        return CollisionCheck(new Vector3(0, -0.5f, 0), 1f, 0.5f, GroundLayerMask);
     }
 
-    private bool CollisionCheck(Vector3 direction, float maxLength, LayerMask layerMask)
+    private bool CollisionCheck(Vector3 direction,float radius , float maxLength, LayerMask layerMask)
     {
         RaycastHit hit;
         Ray ray = new Ray(transform.position,direction);
         Physics.SphereCast(
             ray,
-            1f,
+            radius,
             out hit,
             maxLength,
             layerMask
