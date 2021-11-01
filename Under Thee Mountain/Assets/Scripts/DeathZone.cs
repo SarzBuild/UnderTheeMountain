@@ -1,22 +1,23 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
-public class DeathZone : MonoBehaviour
+public class DeathZone : CheckPlayerCollision
 {
-    public LayerMask PlayerLayerMask;
-    private PlayerReferences _playerReferences;
+    private PlayerController _playerController;
+    private Collider _collider;
 
-    private void Start()
+    private void Awake()
     {
-        _playerReferences = PlayerReferences.Instance;
+        _collider = GetComponent<Collider>();
     }
     
-    private void OnTriggerEnter(Collider other)
+    private void Start()
     {
-        if ((PlayerLayerMask.value & (1 << other.gameObject.layer)) > 0)
-        {
-            _playerReferences.CurrentHealth = 0;
-        }
+        _playerController = PlayerController.Instance;
+    }
+
+    private void Update()
+    {
+        if (CheckForObject(_collider, Vector3.up, PlayerLayerMask, 0.5f)) _playerController.CurrentHealth = 0;
+        
     }
 }

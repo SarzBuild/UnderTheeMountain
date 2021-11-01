@@ -1,17 +1,16 @@
-using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
 public class LerpBetweenTwoPoints : MonoBehaviour
 {
-    private float _timePerSegments = 10f;
-    private float _timeIntoSegments = 5f;
-
-    public List<Transform> Transforms = new List<Transform>();
+    public readonly List<Transform> Transforms = new List<Transform>();
     private List<Vector3> _positionList;
 
-    private int _LastPos;
+    private int _lastPos;
     private int _moveTowardsNextPos;
+    
+    private float _timePerSegments = 10f;
+    private float _timeIntoSegments = 5f;
 
     private void Start()
     {
@@ -21,11 +20,11 @@ public class LerpBetweenTwoPoints : MonoBehaviour
     private void MakeVector3List()
     {
         _positionList = new List<Vector3>();
-        for (int i = 0; i < Transforms.Count; i++)
+        foreach (var t in Transforms)
         {
-            _positionList.Add(Transforms[i].position);
+            _positionList.Add(t.position);
         }
-        _LastPos = 0;
+        _lastPos = 0;
         _moveTowardsNextPos = 1;
     }
 
@@ -40,7 +39,7 @@ public class LerpBetweenTwoPoints : MonoBehaviour
         _timeIntoSegments += Time.deltaTime;
         if (_timeIntoSegments > _timePerSegments)
         {
-            _LastPos = _moveTowardsNextPos;
+            _lastPos = _moveTowardsNextPos;
             _moveTowardsNextPos++;
             if (_moveTowardsNextPos == _positionList.Count)
             {
@@ -48,7 +47,7 @@ public class LerpBetweenTwoPoints : MonoBehaviour
             }
             _timeIntoSegments -= _timePerSegments;
         }
-        float param = _timeIntoSegments / _timePerSegments;
-        transform.position = Vector3.Lerp(_positionList[_LastPos], _positionList[_moveTowardsNextPos], param);
+        var param = _timeIntoSegments / _timePerSegments;
+        transform.position = Vector3.Lerp(_positionList[_lastPos], _positionList[_moveTowardsNextPos], param);
     }
 }

@@ -1,40 +1,39 @@
-using System.Collections;
-using System.Collections.Generic;
-using Unity.VisualScripting;
+using System;
 using UnityEngine;
 
-public class CollectableItem : MonoBehaviour
+public class CollectableItem : CheckPlayerCollision
 {
-    private PlayerReferences _playerReferences;
-    public LayerMask PlayerLayerMask;
-
-
     public CollectibleType CollectibleObject;
     public enum CollectibleType
     {
         Health,
         Bullet
     }
+    
+    public PlayerShooting PlayerShooting;
+    private PlayerController _playerController;
+    private Collider _collider;
 
     private void Start()
     {
-        _playerReferences = PlayerReferences.Instance;
+        _playerController = PlayerController.Instance;
+        _collider = GetComponent<Collider>();
     }
 
-    private void OnTriggerEnter(Collider other)
+    private void Update()
     {
-        if ((PlayerLayerMask.value & (1 << other.gameObject.layer)) > 0)
+        if (!CheckForObject(_collider, Vector3.up, PlayerLayerMask, 0.5f)) return;
+        switch (CollectibleObject)
         {
-            switch (CollectibleObject)
-            {
-                case CollectibleType.Bullet:
-                    _playerReferences.CurrentMagazineCount++;
-                    break;
-                case CollectibleType.Health:
-                    _playerReferences.CurrentHealth += 10;
-                    break;
-            }
-            Destroy(transform.parent.gameObject);
+            case CollectibleType.Bullet:
+                PlayerShooting.CurrentMagazineCount++;
+                break;
+            case CollectibleType.Health:
+                _playerController.CurrentHealth += 10;
+                break;
+            default:
+                throw new ArgumentOutOfRangeException();
         }
+        Destroy(transform.parent.gameObject);
     }
 }

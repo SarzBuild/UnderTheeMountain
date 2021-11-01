@@ -1,15 +1,18 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
-public class WinZone : MonoBehaviour
+public class WinZone : CheckPlayerCollision
 {
-    public LayerMask PlayerLayerMask;
     public PauseMenuManager PauseMenuManager;
-    
-    private void OnTriggerEnter(Collider other)
+    private Collider _collider;
+
+    private void Awake()
     {
-        if ((PlayerLayerMask.value & (1 << other.gameObject.layer)) > 0)
+        _collider = GetComponent<Collider>();
+    }
+
+    private void Update()
+    {
+        if (CheckForObject(_collider, Vector3.up, PlayerLayerMask, 0.5f))
         {
             PauseMenuManager.UIMenuOnWin();
         }

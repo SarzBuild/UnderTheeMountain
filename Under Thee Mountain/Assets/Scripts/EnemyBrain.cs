@@ -1,27 +1,24 @@
 using System.Collections;
 using System.Collections.Generic;
-using System.Linq;
-using System.Runtime.Remoting.Messaging;
-using Unity.VisualScripting;
-using UnityEditor.Experimental.GraphView;
 using UnityEngine;
 using UnityEngine.AI;
 
 public class EnemyBrain : MonoBehaviour
 {
-    [Header("Inventory")]
-    public int MaxHealth = 100;
+    [Header("Inventory")] public int MaxHealth = 100;
     public int CurrentHealth;
     public int ScoreToGive;
-    
-    [Header("References")]
-    public Transform TargetPlayer;
+
+    [Header("References")] public Transform TargetPlayer;
     public NavMeshAgent NavMeshAgent;
     public Collider EnemyCollider;
     public Transform FleeToTarget;
-    
-    private PlayerReferences _playerReferences;
-    
+    public Animator AnimatorComponent;
+    public GameObject Ghost;
+    public GameObject BloodBath;
+
+    private PlayerUIManager _playerUiManager;
+
     [Header("Brain Functionalities & Navigation")]
     public float AggroRange;
     public int RunThreshold;
@@ -37,24 +34,25 @@ public class EnemyBrain : MonoBehaviour
     private bool _possibleGangUp;
     private bool _canMove;
 
-    [Header("Layer Masks")]
-    public LayerMask PlayerLayerMask;
+    private bool _deathSequence;
+
+    [Header("Layer Masks")] public LayerMask PlayerLayerMask;
     public LayerMask FriendLayerMask;
-    
-    [Header("Detection Lists")]
-    public Collider[] Colliders;
+
+    [Header("Detection Lists")] public Collider[] Colliders;
     public List<Transform> NearestTransforms = new List<Transform>();
-    
+
     private void Awake()
     {
         EnemyCollider = GetComponent<Collider>();
+        AnimatorComponent = GetComponentInParent<Animator>();
         CurrentHealth = MaxHealth;
         _canMove = true;
     }
 
     private void Start()
     {
-        _playerReferences = PlayerReferences.Instance;
+        _playerUiManager = PlayerUIManager.Instance;
     }
 
     private void Update()
@@ -64,6 +62,7 @@ public class EnemyBrain : MonoBehaviour
         HandleMovement();
         HandleFlee();
         HandleAttack();
+        HandleAnimations();
     }
 
     private void OnDrawGizmos()
@@ -74,89 +73,70 @@ public class EnemyBrain : MonoBehaviour
     private bool HandleSeeingDistancePlayer() => HandleNearDetectionPlayer(SeeingRange);
     private bool HandleSeeingDistanceFriend() => HandleNearDetectionFriends(SeeingRange);
     private bool HandleAggroDistancePlayer() => HandleNearDetectionPlayer(AggroRange);
-    
+
     private bool HandleNearDetectionPlayer(float radius)
     {
         Colliders = Physics.OverlapSphere(transform.position, radius, PlayerLayerMask);
-        if (Colliders != null && Colliders.Length > 0)
-        {
-            return true;
-        }
-        return false;
+        return Colliders != null && Colliders.Length > 0;
     }
+
     private bool HandleNearDetectionFriends(float radius)
     {
         Colliders = Physics.OverlapSphere(transform.position, radius, FriendLayerMask);
-        if (Colliders != null && Colliders.Length > 0)
+        if (Colliders == null || Colliders.Length <= 0) return false;
+        foreach (var vcollider in Colliders)
         {
-            foreach (var vcollider in Colliders)
-            {
-                if (vcollider != EnemyCollider)
-                {
-                    if (!NearestTransforms.Contains(vcollider.transform))
-                        NearestTransforms.Add(vcollider.transform);
-                }
-            }
-            return true;
+            if (vcollider == EnemyCollider) continue;
+            if (!NearestTransforms.Contains(vcollider.transform))
+                NearestTransforms.Add(vcollider.transform);
         }
-        return false;
+        return true;
     }
 
     private void HandleLookAtChooseTarget()
     {
-        if (HandleSeeingDistancePlayer())
-        {
-           HandleLookAt(TargetPlayer);
-        }
-        else if (HandleSeeingDistanceFriend())
-        {
-            HandleLookAt(HandleFindNearestFriend());
-        }
+        if (HandleSeeingDistancePlayer()) HandleLookAt(TargetPlayer);
+        else if (HandleSeeingDistanceFriend()) HandleLookAt(HandleFindNearestFriend());
     }
 
     private Transform HandleFindNearestFriend()
     {
         _nearestTarget = null;
-        if (NearestTransforms != null && NearestTransforms.Count > 0)
+        if (NearestTransforms == null || NearestTransforms.Count <= 0) return transform;
+        
+        var closestDistanceSqr = Mathf.Infinity;
+        foreach (var possibleTarget in NearestTransforms)
         {
-            float closestDistanceSqr = Mathf.Infinity;
-            foreach (var possibleTarget in NearestTransforms)
-            {
-                Vector3 directionToTarget = possibleTarget.position - transform.position;
-                float dSqrToTarget = directionToTarget.sqrMagnitude;
-                if (dSqrToTarget < closestDistanceSqr)
-                {
-                    closestDistanceSqr = dSqrToTarget;
-                    _nearestTarget = possibleTarget;
-                }
-            }
-            return _nearestTarget;
+            var directionToTarget = possibleTarget.position - transform.position;
+            var dSqrToTarget = directionToTarget.sqrMagnitude;
+            if (!(dSqrToTarget < closestDistanceSqr)) continue;
+            closestDistanceSqr = dSqrToTarget;
+            _nearestTarget = possibleTarget;
         }
-        return transform;
+        return _nearestTarget;
     }
-    
+
     private void HandleLookAt(Transform target)
     {
-        var angleOffset = 90f;
-        
+        const float angleOffset = 90f;
+
         _aimDirection = (target.position - transform.position).normalized;
-        float angle = Mathf.Atan2(_aimDirection.x, _aimDirection.z) * Mathf.Rad2Deg;
+        var angle = Mathf.Atan2(_aimDirection.x, _aimDirection.z) * Mathf.Rad2Deg;
         _rotationNeeded = new Vector3(0, angle - angleOffset, 0);
         transform.eulerAngles = _rotationNeeded;
-        
+
     }
 
     private void HandleMovement()
     {
         if (CurrentHealth > RunThreshold || _possibleGangUp)
         {
-            if (HandleAggroDistancePlayer())
-            {
-                if(NearestTransforms !=null && NearestTransforms.Count > 0)
-                    foreach (var friend in NearestTransforms)
-                        friend.GetComponent<EnemyBrain>()._attackPlayer = true;
-                _attackPlayer = true;
-            }
+            if (!HandleAggroDistancePlayer()) return;
+            
+            if (NearestTransforms != null && NearestTransforms.Count > 0)
+                foreach (var friend in NearestTransforms)
+                    friend.GetComponent<EnemyBrain>()._attackPlayer = true;
+            _attackPlayer = true;
         }
         else if (HandleSeeingDistancePlayer())
         {
@@ -166,37 +146,42 @@ public class EnemyBrain : MonoBehaviour
 
     private void HandleAttack()
     {
-        if (_attackPlayer) 
+        if (_attackPlayer)
         {
             NavMeshAgent.SetDestination(TargetPlayer.position);
         }
-        
+
     }
 
     private void HandleFlee()
     {
-        if (!(NearestTransforms.Count > 2))
+        if (NearestTransforms.Count > 2) return;
+        if (CurrentHealth >= RunThreshold) return;
+        
+        _attackPlayer = false;
+        if (_canMove)
         {
-            if (CurrentHealth < RunThreshold)
-            {
-                _attackPlayer = false;
-                if (_canMove)
-                {
-                    NavMeshAgent.SetDestination(FleeToTarget.position);
-                }
-            }
+            NavMeshAgent.SetDestination(FleeToTarget.position);
         }
+    }
+
+    private void HandleAnimations()
+    {
+        if (AnimatorComponent == null) return;
+        AnimatorComponent.SetBool("Attacking", Vector3.Distance(transform.position, TargetPlayer.position) <= 10f);
+        AnimatorComponent.SetBool("Dead", CurrentHealth <= 0);
     }
 
     private void OnDisable()
     {
         OnDisableUnsubToFriendsLists();
     }
+
     private void OnDisableUnsubToFriendsLists()
     {
-        foreach (var variTransform in NearestTransforms)
+        foreach (var varTransform in NearestTransforms)
         {
-            variTransform.GetComponent<EnemyBrain>().NearestTransforms.Remove(transform);
+            varTransform.GetComponent<EnemyBrain>().NearestTransforms.Remove(transform);
         }
     }
 
@@ -207,12 +192,25 @@ public class EnemyBrain : MonoBehaviour
 
     private void HandleDeath()
     {
-        if (CurrentHealth <= 0)
+        if (CurrentHealth > 0) return;
+        if (!_deathSequence)
         {
-            _canMove = false;
-            NavMeshAgent.isStopped = true;
-            _playerReferences.ScoreCount += ScoreToGive;
-            gameObject.SetActive(false);
+            StartCoroutine(DeathSequence());
         }
     }
+
+    private IEnumerator DeathSequence()
+    {
+        Instantiate(Ghost, transform.position, transform.rotation);
+        Instantiate(BloodBath, transform.position, transform.rotation);
+        _deathSequence = true;
+        EnemyCollider.enabled = false;
+        _canMove = false;
+        NavMeshAgent.isStopped = true;
+        NavMeshAgent.enabled = false;
+        _playerUiManager.ScoreCountNumber += ScoreToGive;
+        yield return new WaitForSeconds(1.1f);
+        gameObject.SetActive(false);
+    }
+
 }
